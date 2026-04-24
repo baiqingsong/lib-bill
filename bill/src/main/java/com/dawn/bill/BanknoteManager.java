@@ -52,10 +52,10 @@ public class BanknoteManager {
     private static final long HEARTBEAT_INTERVAL_MS = 30000;
     /** 心跳响应超时（毫秒） */
     private static final long HEARTBEAT_TIMEOUT_MS = 5000;
-    /** 最大自动重连次数 */
-    private static final int MAX_RECONNECT_RETRIES = 3;
-    /** 重连延迟（毫秒） */
-    private static final long RECONNECT_DELAY_MS = 2000;
+    /** 重连基础延迟（毫秒） */
+    private static final long RECONNECT_DELAY_BASE_MS = 2000;
+    /** 重连最大延迟（毫秒） */
+    private static final long RECONNECT_DELAY_MAX_MS = 30000;
 
     /** 纸钞机运行状态 */
     public enum State {
@@ -131,25 +131,15 @@ public class BanknoteManager {
         }
     };
 
-    // 自动重连
+    // 自动重连（无限重试，使用退避延迟）
     private int mReconnectRetryCount;
     private final Runnable mAutoReconnectRunnable = () -> {
         synchronized (mLock) {
             if (mDestroyed || mState != State.IDLE || mCurrentPort < 0) {
                 return;
             }
-            if (mReconnectRetryCount >= MAX_RECONNECT_RETRIES) {
-                Log.w(TAG, "Max reconnect retries reached (" + MAX_RECONNECT_RETRIES + ")");
-                notifyOnMainThread(() -> {
-                    BanknoteReceiverListener l = mListener;
-                    if (l != null) {
-                        l.onError("自动重连失败，已达最大重试次数");
-                    }
-                });
-                return;
-            }
             mReconnectRetryCount++;
-            Log.i(TAG, "Auto reconnecting, attempt " + mReconnectRetryCount + "/" + MAX_RECONNECT_RETRIES);
+            Log.i(TAG, "Auto reconnecting, attempt " + mReconnectRetryCount);
             mState = State.CONNECTING;
         }
         openPort(mCurrentPort);
@@ -470,6 +460,8 @@ public class BanknoteManager {
                     synchronized (mLock) {
                         mState = State.RECEIVING;
                     }
+                    // 进入收款模式后停止心跳，防止"02"指令干扰纸钞识别/接受流程
+                    stopHeartbeat();
                     notifyOnMainThread(() -> {
                         BanknoteReceiverListener l = mListener;
                         if (l != null) {
@@ -483,6 +475,8 @@ public class BanknoteManager {
                             mState = State.CONNECTED;
                         }
                     }
+                    // 退出收款模式后恢复心跳
+                    startHeartbeat();
                     notifyOnMainThread(() -> {
                         BanknoteReceiverListener l = mListener;
                         if (l != null) {
@@ -588,14 +582,13 @@ public class BanknoteManager {
             if (mDestroyed || mCurrentPort < 0) {
                 return;
             }
-            if (mReconnectRetryCount >= MAX_RECONNECT_RETRIES) {
-                Log.w(TAG, "Max reconnect retries reached, not scheduling auto reconnect");
-                return;
-            }
         }
         if (mSerialHandler != null) {
+            // 指数退避：2s → 4s → 8s → ... 上限 30s
+            long delay = Math.min(RECONNECT_DELAY_BASE_MS * (1L << Math.min(mReconnectRetryCount, 4)),
+                    RECONNECT_DELAY_MAX_MS);
             mSerialHandler.removeCallbacks(mAutoReconnectRunnable);
-            mSerialHandler.postDelayed(mAutoReconnectRunnable, RECONNECT_DELAY_MS);
+            mSerialHandler.postDelayed(mAutoReconnectRunnable, delay);
         }
     }
 
