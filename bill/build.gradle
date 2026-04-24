@@ -41,5 +41,5 @@ afterEvaluate {
 }
 
 dependencies {
-    implementation 'com.github.baiqingsong:libSerial:1.0.9'
+    // 串口无关版本：不依赖任何串口库，由宿主 App 注入 BanknoteSerialPort 实现
 }
