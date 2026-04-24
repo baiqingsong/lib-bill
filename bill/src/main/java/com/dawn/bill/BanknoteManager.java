@@ -128,6 +128,9 @@ public class BanknoteManager {
         if (!mHeartbeatResponseReceived) {
             Log.w(TAG, "Heartbeat timeout, connection may be lost");
             handleConnectionLost();
+        } else {
+            // 本次心跳响应正常，安排下一轮心跳
+            scheduleNextHeartbeat();
         }
     };
 
@@ -255,7 +258,7 @@ public class BanknoteManager {
         synchronized (mLock) {
             mTotalMoney = 0;
             mState = State.IDLE;
-            mReconnectRetryCount = MAX_RECONNECT_RETRIES; // 阻止自动重连
+            mCurrentPort = -1; // 阻止自动重连
         }
         if (mSerialHandler != null) {
             mSerialHandler.removeCallbacks(mAutoReconnectRunnable);
@@ -326,10 +329,13 @@ public class BanknoteManager {
         }
         if (mSerialHandler != null) {
             mSerialHandler.removeCallbacksAndMessages(null);
+            HandlerThread threadToQuit = mSerialThread;
             mSerialHandler.post(() -> {
                 stopHeartbeat();
                 closePort();
-                mSerialThread.quitSafely();
+                if (threadToQuit != null) {
+                    threadToQuit.quitSafely();
+                }
             });
             mSerialThread = null;
             mSerialHandler = null;
@@ -412,16 +418,19 @@ public class BanknoteManager {
             // 启动握手超时检测
             scheduleHandshakeTimeout();
 
-        } catch (Exception e) {
-            Log.e(TAG, "Failed to create serial connection", e);
+        } catch (Throwable t) {
+            // 需捕获 Throwable：libserial_port.so 缺失时抛出的是 UnsatisfiedLinkError / NoClassDefFoundError（Error子类），
+            // catch(Exception) 无法覆盖，必须使用 Throwable 才能避免线程崩溃。
+            Log.e(TAG, "Failed to create serial connection", t);
             synchronized (mLock) {
                 mState = State.IDLE;
             }
+            final String errMsg = t.getMessage() != null ? t.getMessage() : t.getClass().getSimpleName();
             notifyOnMainThread(() -> {
                 BanknoteReceiverListener l = mListener;
                 if (l != null) {
                     l.onConnected(false);
-                    l.onError("创建串口连接失败: " + e.getMessage());
+                    l.onError("创建串口连接失败: " + errMsg);
                 }
             });
             scheduleAutoReconnect();
