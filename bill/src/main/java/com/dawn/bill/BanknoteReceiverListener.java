@@ -31,9 +31,8 @@ public interface BanknoteReceiverListener {
      * 收到纸币回调
      *
      * @param moneyIndex 面额索引（1-16，对应纸钞机面额通道编号）
-     * @param totalMoney 目标收款金额
      */
-    void onMoneyReceived(int moneyIndex, int totalMoney);
+    void onMoneyReceived(int moneyIndex);
 
     /**
      * 纸钞机错误回调

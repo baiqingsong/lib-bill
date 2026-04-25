@@ -81,7 +81,6 @@ public class BanknoteManager {
     private volatile BanknoteReceiverListener mListener;
     private volatile BanknoteSerialPort mSerialPort;
     private volatile State mState = State.IDLE;
-    private volatile int mTotalMoney;
     private volatile boolean mDestroyed;
     private volatile boolean mHeartbeatResponseReceived;
     private int mCurrentPort = -1;
@@ -168,10 +167,6 @@ public class BanknoteManager {
         return mCurrentPort;
     }
 
-    public int getTotalMoney() {
-        return mTotalMoney;
-    }
-
     /**
      * 通知管理器串口已打开，开始等待握手。
      * 宿主 App 必须在调用此方法前先打开串口并调用 {@link #setSerialPort}。
@@ -218,20 +213,14 @@ public class BanknoteManager {
     }
 
     /**
-     * 开始收款
-     *
-     * @param money 目标收款金额（必须大于 0）
+     * 开始收款，通知设备进入收款模式。
+     * 受多少钱由业务层自行累计判断。
      */
-    public void startMoney(int money) {
-        if (money <= 0) {
-            Log.w(TAG, "Invalid money: " + money);
-            return;
-        }
+    public void startMoney() {
         if (!isConnected()) {
             Log.w(TAG, "Not connected, cannot startMoney. state=" + mState);
             return;
         }
-        mTotalMoney = money;
         sendMsg(BanknoteCommand.getStartMoneyCommand());
     }
 
@@ -243,7 +232,6 @@ public class BanknoteManager {
             Log.w(TAG, "Not connected, cannot stopMoney. state=" + mState);
             return;
         }
-        mTotalMoney = 0;
         sendMsg(BanknoteCommand.getStopMoneyCommand());
     }
 
@@ -252,7 +240,6 @@ public class BanknoteManager {
      */
     public void disconnect() {
         synchronized (mLock) {
-            mTotalMoney = 0;
             mState = State.IDLE;
             mCurrentPort = -1;
         }
@@ -267,7 +254,6 @@ public class BanknoteManager {
         synchronized (mLock) {
             mDestroyed = true;
             mState = State.IDLE;
-            mTotalMoney = 0;
             mListener = null;
             mSerialPort = null;
         }
@@ -391,11 +377,10 @@ public class BanknoteManager {
         if (value >= BanknoteCommand.MONEY_RANGE_START && value <= BanknoteCommand.MONEY_RANGE_END) {
             sendMsg(BanknoteCommand.getReceiverCommand()); // 接受纸钞 "02"
             int moneyIndex = value - BanknoteCommand.MONEY_RANGE_START + 1;
-            int total = mTotalMoney;
             Log.i(TAG, "Money received: channel=" + moneyIndex);
             notifyOnMainThread(() -> {
                 BanknoteReceiverListener l = mListener;
-                if (l != null) l.onMoneyReceived(moneyIndex, total);
+                if (l != null) l.onMoneyReceived(moneyIndex);
             });
         }
     }
@@ -467,7 +452,6 @@ public class BanknoteManager {
             if (mState == State.IDLE || mDestroyed) return;
             Log.w(TAG, "Connection lost, prev state=" + mState);
             mState = State.IDLE;
-            mTotalMoney = 0;
         }
         stopHeartbeat();
         cancelHandshakeTimeout();
