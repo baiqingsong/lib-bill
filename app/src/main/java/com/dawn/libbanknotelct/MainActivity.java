@@ -37,8 +37,8 @@ public class MainActivity extends AppCompatActivity {
             }
 
             @Override
-            public void onMoneyReceived(int moneyIndex, int totalMoney) {
-                Log.d(TAG, "onMoneyReceived index=" + moneyIndex + ", total=" + totalMoney);
+            public void onMoneyReceived(int moneyIndex) {
+                Log.d(TAG, "onMoneyReceived index=" + moneyIndex);
             }
 
             @Override
@@ -53,7 +53,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void startMoney(View view) {
-        mBanknoteManager.startMoney(5);
+        mBanknoteManager.startMoney();
     }
 
     public void stopMoney(View view) {
