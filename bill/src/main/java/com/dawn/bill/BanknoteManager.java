@@ -75,7 +75,7 @@ public class BanknoteManager {
 
     private static volatile BanknoteManager sInstance;
 
-    private final Handler mMainHandler;
+    private final Handler mMainHandler = new Handler(Looper.getMainLooper());
     private final Object mLock = new Object();
 
     private volatile BanknoteReceiverListener mListener;
@@ -88,13 +88,6 @@ public class BanknoteManager {
 
     // ==================== 心跳 Runnables ====================
 
-    private final Runnable mHeartbeatRunnable = () -> {
-        if (mDestroyed || !isConnected()) return;
-        mHeartbeatResponseReceived = false;
-        sendMsg(BanknoteCommand.getStatusCommand());
-        mMainHandler.postDelayed(mHeartbeatCheckRunnable, HEARTBEAT_TIMEOUT_MS);
-    };
-
     private final Runnable mHeartbeatCheckRunnable = () -> {
         if (mDestroyed || !isConnected()) return;
         if (!mHeartbeatResponseReceived) {
@@ -103,6 +96,13 @@ public class BanknoteManager {
         } else {
             scheduleNextHeartbeat();
         }
+    };
+
+    private final Runnable mHeartbeatRunnable = () -> {
+        if (mDestroyed || !isConnected()) return;
+        mHeartbeatResponseReceived = false;
+        sendMsg(BanknoteCommand.getStatusCommand());
+        mMainHandler.postDelayed(mHeartbeatCheckRunnable, HEARTBEAT_TIMEOUT_MS);
     };
 
     // ==================== 握手超时 Runnable ====================
@@ -125,7 +125,6 @@ public class BanknoteManager {
     // ==================== 构造 & 单例 ====================
 
     private BanknoteManager() {
-        mMainHandler = new Handler(Looper.getMainLooper());
     }
 
     public static BanknoteManager getInstance(Context context) {
@@ -202,7 +201,7 @@ public class BanknoteManager {
      */
     public void onReceived(String hexData) {
         if (TextUtils.isEmpty(hexData) || mDestroyed) return;
-        Log.d(TAG, "Received: " + hexData);
+        Log.e(TAG, "Received raw: [" + hexData + "] state=" + mState);
         parseMessages(hexData.toLowerCase());
     }
 
@@ -334,7 +333,7 @@ public class BanknoteManager {
                 return;
 
             case BanknoteCommand.RESPONSE_DEVICE_STATUS: // "10"
-                // 心跳响应
+                // 心跳响应，不打印
                 mHeartbeatResponseReceived = true;
                 return;
 
@@ -369,7 +368,10 @@ public class BanknoteManager {
 
         // 提取有效载荷（去除 80/81 前缀）
         String payload = extractPayload(msg);
-        if (TextUtils.isEmpty(payload)) return;
+        if (TextUtils.isEmpty(payload)) {
+            Log.e(TAG, "Unknown/empty payload in msg: [" + msg + "]");
+            return;
+        }
 
         int value = parseHex(payload);
         if (value < 0) return;
@@ -421,7 +423,9 @@ public class BanknoteManager {
         BanknoteSerialPort port = mSerialPort;
         if (port != null && !TextUtils.isEmpty(hex)) {
             port.send(hex);
-            Log.d(TAG, "Send: " + hex);
+            Log.e(TAG, "Send: [" + hex + "]");
+        } else {
+            Log.e(TAG, "Send skipped (no serial port injected): [" + hex + "]");
         }
     }
 
