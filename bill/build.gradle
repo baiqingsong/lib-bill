@@ -1,4 +1,4 @@
-﻿plugins {
+lugins {
     id 'com.android.library'
     id 'maven-publish'
 }
