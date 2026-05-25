@@ -1,4 +1,4 @@
-plugins {
+﻿plugins {
     id 'com.android.library'
     id 'maven-publish'
 }
@@ -34,12 +34,12 @@ afterEvaluate {
                 from components.release
                 groupId = 'com.github.baiqingsong'
                 artifactId = 'lib-bill'
-                version = '1.0.9'
+                version = '1.1.0'
             }
         }
     }
 }
 
 dependencies {
-    // 串口无关版本：不依赖任何串口库，由宿�?App 注入 BanknoteSerialPort 实现
+    // 涓插彛鏃犲叧鐗堟湰锛氫笉渚濊禆浠讳綍涓插彛搴擄紝鐢卞涓?App 娉ㄥ叆 BanknoteSerialPort 瀹炵幇
 }
