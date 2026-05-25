@@ -1,10 +1,9 @@
-package com.dawn.bill;
+﻿package com.dawn.bill;
 
 import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.TextUtils;
-import android.util.Log;
 
 /**
  * 纸钞机管理类（串口无关版本）
@@ -90,7 +89,7 @@ public class BanknoteManager {
     private final Runnable mHeartbeatCheckRunnable = () -> {
         if (mDestroyed || !isConnected()) return;
         if (!mHeartbeatResponseReceived) {
-            Log.w(TAG, "Heartbeat timeout, connection may be lost");
+            PaymentLog.w(TAG, "Heartbeat timeout, connection may be lost");
             handleConnectionLost();
         } else {
             scheduleNextHeartbeat();
@@ -111,7 +110,7 @@ public class BanknoteManager {
             if (mState != State.CONNECTING) return;
             mState = State.IDLE;
         }
-        Log.w(TAG, "Handshake timeout");
+        PaymentLog.w(TAG, "Handshake timeout");
         notifyOnMainThread(() -> {
             BanknoteReceiverListener l = mListener;
             if (l != null) {
@@ -178,13 +177,13 @@ public class BanknoteManager {
         synchronized (mLock) {
             if (mDestroyed) return;
             if (mState != State.IDLE) {
-                Log.w(TAG, "startPort called but state=" + mState + ", ignoring");
+                PaymentLog.w(TAG, "startPort called but state=" + mState + ", ignoring");
                 return;
             }
             mCurrentPort = port;
             mState = State.CONNECTING;
         }
-        Log.d(TAG, "startPort: waiting for handshake on port " + port);
+        PaymentLog.d(TAG, "startPort: waiting for handshake on port " + port);
         scheduleHandshakeTimeout();
     }
 
@@ -196,7 +195,7 @@ public class BanknoteManager {
      */
     public void onReceived(String hexData) {
         if (TextUtils.isEmpty(hexData) || mDestroyed) return;
-        Log.e(TAG, "Received raw: [" + hexData + "] state=" + mState);
+        PaymentLog.e(TAG, "Received raw: [" + hexData + "] state=" + mState);
         parseMessages(hexData.toLowerCase());
     }
 
@@ -204,7 +203,7 @@ public class BanknoteManager {
      * 宿主 App 在串口发生错误时调用此方法。
      */
     public void onSerialError(String errorMsg) {
-        Log.e(TAG, "Serial error: " + errorMsg);
+        PaymentLog.e(TAG, "Serial error: " + errorMsg);
         handleConnectionLost();
         notifyOnMainThread(() -> {
             BanknoteReceiverListener l = mListener;
@@ -217,8 +216,9 @@ public class BanknoteManager {
      * 受多少钱由业务层自行累计判断。
      */
     public void startMoney() {
+        PaymentLog.i(TAG, "startMoney called, state=" + mState);
         if (!isConnected()) {
-            Log.w(TAG, "Not connected, cannot startMoney. state=" + mState);
+            PaymentLog.w(TAG, "Not connected, cannot startMoney. state=" + mState);
             return;
         }
         sendMsg(BanknoteCommand.getStartMoneyCommand());
@@ -228,8 +228,9 @@ public class BanknoteManager {
      * 停止收款
      */
     public void stopMoney() {
+        PaymentLog.i(TAG, "stopMoney called, state=" + mState);
         if (!isConnected()) {
-            Log.w(TAG, "Not connected, cannot stopMoney. state=" + mState);
+            PaymentLog.w(TAG, "Not connected, cannot stopMoney. state=" + mState);
             return;
         }
         sendMsg(BanknoteCommand.getStopMoneyCommand());
@@ -261,7 +262,7 @@ public class BanknoteManager {
         synchronized (BanknoteManager.class) {
             sInstance = null;
         }
-        Log.d(TAG, "BanknoteManager destroyed");
+        PaymentLog.d(TAG, "BanknoteManager destroyed");
     }
 
     // ==================== 内部：消息解析 ====================
@@ -311,7 +312,7 @@ public class BanknoteManager {
                     }
                 }
                 startHeartbeat();
-                Log.i(TAG, "Handshake OK → CONNECTED");
+                PaymentLog.i(TAG, "Handshake OK → CONNECTED");
                 notifyOnMainThread(() -> {
                     BanknoteReceiverListener l = mListener;
                     if (l != null) l.onConnected(true);
@@ -329,7 +330,7 @@ public class BanknoteManager {
                 }
                 // 收款中停止心跳，防止 "02" 干扰纸钞识别/接受流程
                 stopHeartbeat();
-                Log.i(TAG, "StartMoney confirmed → RECEIVING (heartbeat stopped)");
+                PaymentLog.i(TAG, "StartMoney confirmed → RECEIVING (heartbeat stopped)");
                 notifyOnMainThread(() -> {
                     BanknoteReceiverListener l = mListener;
                     if (l != null) l.onStartMoney(true);
@@ -341,7 +342,7 @@ public class BanknoteManager {
                     if (mState == State.RECEIVING) mState = State.CONNECTED;
                 }
                 startHeartbeat();
-                Log.i(TAG, "StopMoney confirmed → CONNECTED (heartbeat resumed)");
+                PaymentLog.i(TAG, "StopMoney confirmed → CONNECTED (heartbeat resumed)");
                 notifyOnMainThread(() -> {
                     BanknoteReceiverListener l = mListener;
                     if (l != null) l.onStopMoney(true);
@@ -355,7 +356,7 @@ public class BanknoteManager {
         // 提取有效载荷（去除 80/81 前缀）
         String payload = extractPayload(msg);
         if (TextUtils.isEmpty(payload)) {
-            Log.e(TAG, "Unknown/empty payload in msg: [" + msg + "]");
+            PaymentLog.e(TAG, "Unknown/empty payload in msg: [" + msg + "]");
             return;
         }
 
@@ -365,7 +366,7 @@ public class BanknoteManager {
         // 错误码范围: 0x20-0x2F
         if (value >= BanknoteCommand.ERROR_RANGE_START && value <= BanknoteCommand.ERROR_RANGE_END) {
             String errorMsg = BanknoteCommand.getErrorMessage(payload);
-            Log.w(TAG, "Banknote error: " + errorMsg);
+            PaymentLog.w(TAG, "Banknote error: " + errorMsg);
             notifyOnMainThread(() -> {
                 BanknoteReceiverListener l = mListener;
                 if (l != null) l.onError(errorMsg);
@@ -377,7 +378,7 @@ public class BanknoteManager {
         if (value >= BanknoteCommand.MONEY_RANGE_START && value <= BanknoteCommand.MONEY_RANGE_END) {
             sendMsg(BanknoteCommand.getReceiverCommand()); // 接受纸钞 "02"
             int moneyIndex = value - BanknoteCommand.MONEY_RANGE_START + 1;
-            Log.i(TAG, "Money received: channel=" + moneyIndex);
+            PaymentLog.i(TAG, "Money received: channel=" + moneyIndex);
             notifyOnMainThread(() -> {
                 BanknoteReceiverListener l = mListener;
                 if (l != null) l.onMoneyReceived(moneyIndex);
@@ -408,9 +409,9 @@ public class BanknoteManager {
         BanknoteSerialPort port = mSerialPort;
         if (port != null && !TextUtils.isEmpty(hex)) {
             port.send(hex);
-            Log.e(TAG, "Send: [" + hex + "]");
+            PaymentLog.e(TAG, "Send: [" + hex + "]");
         } else {
-            Log.e(TAG, "Send skipped (no serial port injected): [" + hex + "]");
+            PaymentLog.e(TAG, "Send skipped (no serial port injected): [" + hex + "]");
         }
     }
 
@@ -450,7 +451,7 @@ public class BanknoteManager {
     private void handleConnectionLost() {
         synchronized (mLock) {
             if (mState == State.IDLE || mDestroyed) return;
-            Log.w(TAG, "Connection lost, prev state=" + mState);
+            PaymentLog.w(TAG, "Connection lost, prev state=" + mState);
             mState = State.IDLE;
         }
         stopHeartbeat();

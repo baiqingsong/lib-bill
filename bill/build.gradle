@@ -34,12 +34,12 @@ afterEvaluate {
                 from components.release
                 groupId = 'com.github.baiqingsong'
                 artifactId = 'lib-bill'
-                version = '1.0.3'
+                version = '1.0.9'
             }
         }
     }
 }
 
 dependencies {
-    // 串口无关版本：不依赖任何串口库，由宿主 App 注入 BanknoteSerialPort 实现
+    // 串口无关版本：不依赖任何串口库，由宿�?App 注入 BanknoteSerialPort 实现
 }
