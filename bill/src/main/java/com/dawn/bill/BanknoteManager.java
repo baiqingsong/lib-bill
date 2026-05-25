@@ -1,4 +1,4 @@
-﻿package com.dawn.bill;
+package com.dawn.bill;
 
 import android.content.Context;
 import android.os.Handler;
